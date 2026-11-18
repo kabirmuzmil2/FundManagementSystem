@@ -1,35 +1,64 @@
-const jwt = require("jsonwebtoken")
+
+const jwt = require("jsonwebtoken");
+const userRepository = require("../repositories/userRepository");
 
 const authenticateUser = async (req, res, next) => {
-    try {
-        // 1. Read JWT from the browser cookie
-        const token = req.cookies.token; // *** Reads JWT from the cookie
+  const token = req.cookies.token;
 
-        // 2. Check whether token exists
-        if (!token) {
-            return res.status(401).json({
-                success: false,
-                message: "Authentication required. Please login.",
-            });
-        }
+  if (!token) {
+    return res.status(401).json({
+      success: false,
+      message: "Authentication required. Please login.",
+    });
+  }
 
-        // 3. Verify JWT
-        const decoded = jwt.verify(token, process.env.JWT_SECRET_KEY); //*** Verifies signature and expiry        
+  let decoded;
 
-        // 4. Attach decoded user information to request
-        req.user = decoded;  // it contains userId, email, role from jwt.sign {userId: 1,  email: "rahul@gmail.com",  role: "RelationshipManager"}
-
-        // 5. Continue to the next middleware/controller
-        next();
-
-    } catch (error) {
-         return res.status(401).json({
+  // Step 1: Verify JWT
+  try {
+    decoded = jwt.verify(token, process.env.JWT_SECRET_KEY);
+  } catch (error) {
+    return res.status(401).json({
       success: false,
       message: "Invalid or expired token",
     });
-    }
-}
+  }
 
-module.exports={
-    authenticateUser
-}
+  // Step 2: Fetch latest user details from SQL Server
+  try {
+    const currentUser = await userRepository.findUserById(
+      decoded.userId
+    );
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid authentication",
+      });
+    }
+
+    // Step 3: Check account status
+    if (currentUser.Status !== "Active") {
+      return res.status(403).json({
+        success: false,
+        message: "Your account is inactive",
+      });
+    }
+
+    // Step 4: Attach latest user details
+    req.user = {
+      userId: currentUser.UserId,
+      email: currentUser.Email,
+      role: currentUser.Role,
+    };
+
+    next();
+
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = {
+  authenticateUser,
+};

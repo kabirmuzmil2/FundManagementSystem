@@ -7,7 +7,13 @@ const cookieParser = require("cookie-parser");
 
 const app = express(); // Create an Express application
 //middleware
-app.use(cors());
+app.use(
+  cors({
+    origin: "http://localhost:3000",
+    credentials: true,
+  })
+);
+
 app.use(express.json());
 app.use(cookieParser()); // reads incoming cookies and makes them available through "req.cookies".
 app.use("/api/customers", customerRoutes);
